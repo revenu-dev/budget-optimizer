@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Optimizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Open+Sans:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #fbf7f4;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .container {
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(49, 119, 115, 0.1);
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 540px;
+    }
+
+    h1 {
+      font-family: 'Montserrat', sans-serif;
+      color: #317773;
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      font-family: 'Montserrat', sans-serif;
+      color: #333;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    textarea {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #317773;
+      box-shadow: 0 0 0 3px rgba(49, 119, 115, 0.1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: #999;
+      margin-top: 0.5rem;
+    }
+
+    /* File upload */
+    .file-upload {
+      position: relative;
+      border: 2px dashed #ddd;
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background-color 0.2s;
+    }
+
+    .file-upload:hover {
+      border-color: #317773;
+      background-color: rgba(49, 119, 115, 0.02);
+    }
+
+    .file-upload.dragover {
+      border-color: #317773;
+      background-color: rgba(49, 119, 115, 0.05);
+    }
+
+    .file-upload.has-file {
+      border-color: #317773;
+      background-color: rgba(49, 119, 115, 0.05);
+    }
+
+    .file-upload input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .file-upload-label {
+      font-family: 'Montserrat', sans-serif;
+      color: #317773;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .file-upload-hint {
+      font-size: 0.75rem;
+      color: #999;
+      margin-top: 0.25rem;
+    }
+
+    .file-info {
+      display: none;
+      margin-top: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: rgba(49, 119, 115, 0.05);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: #333;
+    }
+
+    .file-info.visible {
+      display: block;
+    }
+
+    .file-info .file-name {
+      font-weight: 500;
+      color: #317773;
+    }
+
+    .file-info .file-stats {
+      color: #666;
+      margin-top: 0.25rem;
+    }
+
+    .file-info .file-preview {
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(49, 119, 115, 0.15);
+      font-family: monospace;
+      font-size: 0.7rem;
+      color: #666;
+      white-space: pre;
+      overflow-x: auto;
+      max-height: 80px;
+    }
+
+    .file-info .column-match {
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(49, 119, 115, 0.15);
+      font-size: 0.75rem;
+      color: #666;
+    }
+
+    .file-info .column-match .match-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.15rem 0;
+    }
+
+    .file-info .column-match .match-label {
+      color: #999;
+    }
+
+    .file-info .column-match .match-value {
+      font-weight: 500;
+      color: #317773;
+    }
+
+    .file-info .column-match .match-value.missing {
+      color: #dc2626;
+    }
+
+    /* Submit */
+    button[type="submit"] {
+      width: 100%;
+      padding: 0.875rem 1.5rem;
+      background-color: #317773;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    button[type="submit"]:hover {
+      background-color: #285f5c;
+    }
+
+    button[type="submit"]:active {
+      transform: scale(0.98);
+    }
+
+    button[type="submit"]:disabled {
+      background-color: #999;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      display: none;
+    }
+
+    .status.success {
+      display: block;
+      background-color: rgba(49, 119, 115, 0.1);
+      color: #317773;
+    }
+
+    .status.error {
+      display: block;
+      background-color: #fef2f2;
+      color: #dc2626;
+    }
+
+    /* Advanced section */
+    .advanced-section {
+      margin-bottom: 1.5rem;
+      border: 1px solid #eee;
+      border-radius: 8px;
+    }
+
+    .advanced-section summary {
+      padding: 0.875rem 1rem;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #666;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .advanced-section summary:hover {
+      color: #317773;
+    }
+
+    .advanced-section[open] summary {
+      border-bottom: 1px solid #eee;
+    }
+
+    .advanced-content {
+      padding: 1rem;
+    }
+
+    .advanced-content .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .advanced-content input[type="text"] {
+      font-family: monospace;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Budget Optimizer</h1>
+    <p class="subtitle">Upload campaign performance data to generate suggested budget weightings.</p>
+
+    <form id="optimizerForm">
+      <div class="form-group">
+        <label for="clientName">Client Name</label>
+        <input type="text" id="clientName" name="clientName" placeholder="e.g. Heartland" required>
+      </div>
+
+      <div class="form-group">
+        <label>Campaign Performance CSV</label>
+        <div class="file-upload" id="fileUploadArea">
+          <input type="file" id="csvFile" accept=".csv,.tsv,.txt">
+          <div class="file-upload-label">Click to upload or drag & drop</div>
+          <div class="file-upload-hint">CSV with: Budget Group, Campaign, Cost, Clicks, Leads</div>
+        </div>
+        <div class="file-info" id="fileInfo">
+          <div class="file-name" id="fileName"></div>
+          <div class="file-stats" id="fileStats"></div>
+          <div class="column-match" id="columnMatch"></div>
+          <div class="file-preview" id="filePreview"></div>
+        </div>
+      </div>
+
+      <details class="advanced-section">
+        <summary>I know what I'm doing</summary>
+        <div class="advanced-content">
+          <div class="form-group">
+            <label for="lookbackDays">Lookback Window (days)</label>
+            <input type="number" id="lookbackDays" name="lookbackDays" value="14" min="1" max="90">
+          </div>
+
+          <div class="form-group">
+            <label for="instructions">Additional Instructions</label>
+            <textarea id="instructions" name="instructions" placeholder="e.g. Brand campaigns should keep at least 30% combined..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="webhookUrl">Relay Webhook URL</label>
+            <input type="text" id="webhookUrl" name="webhookUrl" value="https://hook.relay.app/api/v1/playbook/cmllebibe0ig30qm1eg2hbd3c/trigger/QLpBBoNpaFuTActubw5LVg">
+          </div>
+        </div>
+      </details>
+
+      <button type="submit" id="submitBtn">Run Budget Optimization</button>
+
+      <div class="status" id="status"></div>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('optimizerForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusEl = document.getElementById('status');
+    const csvFileInput = document.getElementById('csvFile');
+    const fileUploadArea = document.getElementById('fileUploadArea');
+    const fileInfoEl = document.getElementById('fileInfo');
+
+    let parsedCampaignData = null;
+    let csvFilename = null;
+
+    // ─── Fuzzy column matching ───────────────────────────────────────
+    // Each target field has keyword groups. A header matches if ALL words
+    // in any one group appear in the lowercased/cleaned header.
+    // Order matters: first match wins, so put more specific patterns first.
+    const COLUMN_MATCHERS = {
+      budgetGroup: {
+        label: 'Budget Group',
+        patterns: [
+          ['budget', 'group'],
+          ['budget'],
+          ['strategic', 'campaign'],
+        ],
+      },
+      campaign: {
+        label: 'Campaign',
+        patterns: [['campaign']],
+      },
+      cost: {
+        label: 'Cost',
+        patterns: [['cost'], ['spend'], ['amount', 'spent']],
+      },
+      clicks: {
+        label: 'Clicks',
+        patterns: [['clicks'], ['click']],
+      },
+      leads: {
+        label: 'Leads',
+        patterns: [
+          ['leads'], ['lead'],
+          ['conversions'], ['conversion'], ['conv'],
+          ['mqls'], ['mql'],
+          ['form', 'submit'],
+          ['demo', 'request'],
+        ],
+      },
+    };
+
+    const REQUIRED_FIELDS = ['budgetGroup', 'campaign', 'cost', 'clicks', 'leads'];
+
+    // Match priority: we want "campaign" to not steal "strategic campaign"
+    // from budgetGroup. Process budgetGroup first since its patterns are
+    // more specific when "campaign" appears in the header.
+    const MATCH_ORDER = ['budgetGroup', 'cost', 'clicks', 'leads', 'campaign'];
+
+    function classifyHeader(rawHeader, alreadyMatched) {
+      const cleaned = rawHeader
+        .toLowerCase()
+        .replace(/"/g, '')
+        .replace(/[_\-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      for (const field of MATCH_ORDER) {
+        if (alreadyMatched.has(field)) continue;
+        const { patterns } = COLUMN_MATCHERS[field];
+        for (const words of patterns) {
+          if (words.every(w => cleaned.includes(w))) return field;
+        }
+      }
+      return null;
+    }
+
+    function mapHeaders(rawHeaders) {
+      const mapping = new Array(rawHeaders.length).fill(null);
+      const matched = {};
+      const alreadyMatched = new Set();
+
+      // Two passes: first for multi-word patterns, then single-word,
+      // to avoid "budget group" header being grabbed by "campaign" matcher.
+      rawHeaders.forEach((raw, i) => {
+        const field = classifyHeader(raw, alreadyMatched);
+        if (field) {
+          mapping[i] = field;
+          matched[field] = raw.trim().replace(/"/g, '');
+          alreadyMatched.add(field);
+        }
+      });
+
+      const missing = REQUIRED_FIELDS
+        .filter(f => !matched[f])
+        .map(f => COLUMN_MATCHERS[f].label);
+
+      return { mapping, matched, missing };
+    }
+
+    // ─── CSV parsing ─────────────────────────────────────────────────
+    function parseNumber(value) {
+      if (value === null || value === undefined || value === '') return 0;
+      const cleaned = value.toString().replace(/[$€£,\s"]/g, '');
+      const num = parseFloat(cleaned);
+      return isNaN(num) ? 0 : num;
+    }
+
+    function detectDelimiter(firstLine) {
+      const tabCount = (firstLine.match(/\t/g) || []).length;
+      // Count commas not inside quotes
+      const commaCount = (firstLine.match(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/g) || []).length;
+      return tabCount >= commaCount ? '\t' : ',';
+    }
+
+    function splitRow(line, delimiter) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          inQuotes = !inQuotes;
+        } else if (ch === delimiter && !inQuotes) {
+          result.push(current);
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      result.push(current);
+      return result;
+    }
+
+    function parseCSV(text) {
+      const lines = text.trim().split(/\r?\n/);
+      if (lines.length < 2) {
+        return { data: [], matched: {}, missing: REQUIRED_FIELDS.map(f => COLUMN_MATCHERS[f].label) };
+      }
+
+      const delimiter = detectDelimiter(lines[0]);
+      const rawHeaders = splitRow(lines[0], delimiter);
+      const { mapping, matched, missing } = mapHeaders(rawHeaders);
+
+      if (missing.length > 0) {
+        return { data: [], matched, missing };
+      }
+
+      const data = [];
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+
+        const values = splitRow(lines[i], delimiter);
+        const row = {};
+
+        mapping.forEach((fieldName, idx) => {
+          if (fieldName && values[idx] !== undefined) {
+            row[fieldName] = values[idx].replace(/"/g, '').trim();
+          }
+        });
+
+        if (!row.campaign) continue;
+
+        row.cost = parseNumber(row.cost);
+        row.clicks = parseNumber(row.clicks);
+        row.leads = parseNumber(row.leads);
+        row.budgetGroup = (row.budgetGroup || '').trim();
+
+        data.push(row);
+      }
+
+      return { data, matched, missing: [] };
+    }
+
+    // ─── File upload ─────────────────────────────────────────────────
+    csvFileInput.addEventListener('change', handleFileSelect);
+
+    fileUploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      fileUploadArea.classList.add('dragover');
+    });
+
+    fileUploadArea.addEventListener('dragleave', () => {
+      fileUploadArea.classList.remove('dragover');
+    });
+
+    fileUploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      fileUploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) {
+        csvFileInput.files = e.dataTransfer.files;
+        handleFileSelect();
+      }
+    });
+
+    function handleFileSelect() {
+      const file = csvFileInput.files[0];
+      if (!file) return;
+
+      statusEl.className = 'status';
+      statusEl.style.display = 'none';
+      csvFilename = file.name;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const { data, matched, missing } = parseCSV(e.target.result);
+
+        if (missing.length > 0) {
+          parsedCampaignData = null;
+          fileUploadArea.classList.remove('has-file');
+          fileInfoEl.classList.remove('visible');
+          showStatus(`Missing required columns: ${missing.join(', ')}`, 'error');
+          return;
+        }
+
+        if (data.length === 0) {
+          parsedCampaignData = null;
+          fileUploadArea.classList.remove('has-file');
+          fileInfoEl.classList.remove('visible');
+          showStatus('No valid data rows found in CSV.', 'error');
+          return;
+        }
+
+        parsedCampaignData = data;
+        fileUploadArea.classList.add('has-file');
+
+        const groups = new Set(data.map(d => d.budgetGroup));
+        const totalCost = data.reduce((s, d) => s + d.cost, 0);
+        const totalClicks = data.reduce((s, d) => s + d.clicks, 0);
+        const totalLeads = data.reduce((s, d) => s + d.leads, 0);
+
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileStats').textContent =
+          `${data.length} campaigns · ${groups.size} budget groups · ` +
+          `$${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cost · ` +
+          `${totalClicks.toLocaleString()} clicks · ${totalLeads.toLocaleString()} leads`;
+
+        // Show column mapping so user can verify fuzzy matches
+        const matchHtml = REQUIRED_FIELDS.map(field => {
+          const label = COLUMN_MATCHERS[field].label;
+          const csvCol = matched[field];
+          return `<div class="match-row">` +
+            `<span class="match-label">${label} →</span> ` +
+            `<span class="match-value${csvCol ? '' : ' missing'}">${csvCol || 'Not found'}</span>` +
+            `</div>`;
+        }).join('');
+        document.getElementById('columnMatch').innerHTML = matchHtml;
+
+        // Budget group preview
+        const groupSummary = {};
+        data.forEach(d => {
+          groupSummary[d.budgetGroup] = (groupSummary[d.budgetGroup] || 0) + 1;
+        });
+        const entries = Object.entries(groupSummary);
+        const preview = entries
+          .slice(0, 5)
+          .map(([g, count]) => `  ${g} (${count})`)
+          .join('\n');
+        const extra = entries.length > 5 ? `\n  ...and ${entries.length - 5} more groups` : '';
+        document.getElementById('filePreview').textContent = `Budget Groups:\n${preview}${extra}`;
+
+        fileInfoEl.classList.add('visible');
+      };
+
+      reader.readAsText(file);
+    }
+
+    // ─── Form submission ─────────────────────────────────────────────
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const webhookUrl = document.getElementById('webhookUrl').value.trim();
+      const clientName = document.getElementById('clientName').value.trim();
+      const lookbackDays = parseInt(document.getElementById('lookbackDays').value, 10) || 14;
+      const instructions = document.getElementById('instructions').value.trim();
+
+      if (!parsedCampaignData || parsedCampaignData.length === 0) {
+        showStatus('Please upload a CSV file with campaign data.', 'error');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+
+      try {
+        const payload = {
+          metadata: {
+            clientName: clientName,
+            lookbackDays: lookbackDays,
+            additionalInstructions: instructions || null,
+            csvFilename: csvFilename,
+          },
+          campaignData: parsedCampaignData.map(row => ({
+            budgetGroup: row.budgetGroup,
+            campaign: row.campaign,
+            cost: row.cost,
+            clicks: row.clicks,
+            leads: row.leads,
+          })),
+        };
+
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Webhook returned ${response.status}`);
+        }
+
+        const groups = new Set(parsedCampaignData.map(d => d.budgetGroup));
+        showStatus(
+          `Submitted ${parsedCampaignData.length} campaigns across ${groups.size} budget groups for ${clientName}. Check Slack for results.`,
+          'success'
+        );
+
+      } catch (err) {
+        showStatus(`Error: ${err.message}`, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Run Budget Optimization';
+      }
+    });
+
+    function showStatus(message, type) {
+      statusEl.textContent = message;
+      statusEl.className = `status ${type}`;
+    }
+  </script>
+</body>
+</html>
