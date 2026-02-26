@@ -202,6 +202,11 @@
       color: #dc2626;
     }
 
+    .file-info .column-match .match-value.optional-missing {
+      color: #999;
+      font-style: italic;
+    }
+
     /* Submit */
     button[type="submit"] {
       width: 100%;
@@ -388,6 +393,24 @@
           ['demo', 'request'],
         ],
       },
+      lostIsRank: {
+        label: 'Lost IS (Rank)',
+        required: false,
+        patterns: [
+          ['lost', 'rank'],
+          ['impression share', 'rank'],
+          ['is', 'rank'],
+        ],
+      },
+      lostIsBudget: {
+        label: 'Lost IS (Budget)',
+        required: false,
+        patterns: [
+          ['lost', 'budget'],
+          ['impression share', 'budget'],
+          ['is', 'budget'],
+        ],
+      },
     };
 
     const REQUIRED_FIELDS = ['budgetGroup', 'campaign', 'cost', 'clicks', 'leads'];
@@ -395,7 +418,7 @@
     // Match priority: we want "campaign" to not steal "strategic campaign"
     // from budgetGroup. Process budgetGroup first since its patterns are
     // more specific when "campaign" appears in the header.
-    const MATCH_ORDER = ['budgetGroup', 'cost', 'clicks', 'leads', 'campaign'];
+    const MATCH_ORDER = ['budgetGroup', 'cost', 'clicks', 'leads', 'lostIsRank', 'lostIsBudget', 'campaign'];
 
     function classifyHeader(rawHeader, alreadyMatched) {
       const cleaned = rawHeader
@@ -441,7 +464,7 @@
     // ─── CSV parsing ─────────────────────────────────────────────────
     function parseNumber(value) {
       if (value === null || value === undefined || value === '') return 0;
-      const cleaned = value.toString().replace(/[$€£,\s"]/g, '');
+      const cleaned = value.toString().replace(/[$€£,%\s"]/g, '');
       const num = parseFloat(cleaned);
       return isNaN(num) ? 0 : num;
     }
@@ -505,6 +528,10 @@
         row.clicks = parseNumber(row.clicks);
         row.leads = parseNumber(row.leads);
         row.budgetGroup = (row.budgetGroup || '').trim();
+
+        // Optional fields — only include if their column was matched in the CSV
+        if (matched.lostIsRank   !== undefined) row.lostIsRank   = parseNumber(row.lostIsRank);
+        if (matched.lostIsBudget !== undefined) row.lostIsBudget = parseNumber(row.lostIsBudget);
 
         data.push(row);
       }
@@ -576,12 +603,15 @@
           `${totalClicks.toLocaleString()} clicks · ${totalLeads.toLocaleString()} leads`;
 
         // Show column mapping so user can verify fuzzy matches
-        const matchHtml = REQUIRED_FIELDS.map(field => {
-          const label = COLUMN_MATCHERS[field].label;
+        const allDisplayFields = ['budgetGroup', 'campaign', 'cost', 'clicks', 'leads', 'lostIsRank', 'lostIsBudget'];
+        const matchHtml = allDisplayFields.map(field => {
+          const config = COLUMN_MATCHERS[field];
           const csvCol = matched[field];
+          const isRequired = REQUIRED_FIELDS.includes(field);
+          const optionalTag = isRequired ? '' : ' <span style="font-size:0.7em;color:#999;">(optional)</span>';
           return `<div class="match-row">` +
-            `<span class="match-label">${label} →</span> ` +
-            `<span class="match-value${csvCol ? '' : ' missing'}">${csvCol || 'Not found'}</span>` +
+            `<span class="match-label">${config.label}${optionalTag} →</span> ` +
+            `<span class="match-value${csvCol ? '' : (isRequired ? ' missing' : ' optional-missing')}">${csvCol || (isRequired ? 'Not found' : 'Not in CSV')}</span>` +
             `</div>`;
         }).join('');
         document.getElementById('columnMatch').innerHTML = matchHtml;
@@ -630,13 +660,18 @@
             additionalInstructions: instructions || null,
             csvFilename: csvFilename,
           },
-          campaignData: parsedCampaignData.map(row => ({
-            budgetGroup: row.budgetGroup,
-            campaign: row.campaign,
-            cost: row.cost,
-            clicks: row.clicks,
-            leads: row.leads,
-          })),
+          campaignData: parsedCampaignData.map(row => {
+            const entry = {
+              budgetGroup: row.budgetGroup,
+              campaign: row.campaign,
+              cost: row.cost,
+              clicks: row.clicks,
+              leads: row.leads,
+            };
+            if (row.lostIsRank   !== undefined) entry.lostIsRank   = row.lostIsRank;
+            if (row.lostIsBudget !== undefined) entry.lostIsBudget = row.lostIsBudget;
+            return entry;
+          }),
         };
 
         const response = await fetch(webhookUrl, {
