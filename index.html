@@ -393,6 +393,27 @@
           ['demo', 'request'],
         ],
       },
+      engine: {
+        label: 'Engine',
+        required: false,
+        patterns: [['engine']],
+      },
+      grossPipeline: {
+        label: 'Gross Pipeline',
+        required: false,
+        patterns: [
+          ['gross', 'pipeline'],
+          ['gp'],
+        ],
+      },
+      qualifiedPipeline: {
+        label: 'Qualified Pipeline',
+        required: false,
+        patterns: [
+          ['qualified', 'pipeline'],
+          ['qp'],
+        ],
+      },
       lostIsRank: {
         label: 'Lost IS (Rank)',
         required: false,
@@ -418,7 +439,7 @@
     // Match priority: we want "campaign" to not steal "strategic campaign"
     // from budgetGroup. Process budgetGroup first since its patterns are
     // more specific when "campaign" appears in the header.
-    const MATCH_ORDER = ['budgetGroup', 'cost', 'clicks', 'leads', 'lostIsRank', 'lostIsBudget', 'campaign'];
+    const MATCH_ORDER = ['budgetGroup', 'cost', 'clicks', 'leads', 'engine', 'grossPipeline', 'qualifiedPipeline', 'lostIsRank', 'lostIsBudget', 'campaign'];
 
     function classifyHeader(rawHeader, alreadyMatched) {
       const cleaned = rawHeader
@@ -528,8 +549,12 @@
         row.clicks = parseNumber(row.clicks);
         row.leads = parseNumber(row.leads);
         row.budgetGroup = (row.budgetGroup || '').trim();
+        row.engine = (row.engine || '').trim();
 
         // Optional fields — only include if their column was matched in the CSV
+        if (matched.engine !== undefined) row.engine = (row.engine || '').trim();
+        if (matched.grossPipeline !== undefined) row.grossPipeline = parseNumber(row.grossPipeline);
+        if (matched.qualifiedPipeline !== undefined) row.qualifiedPipeline = parseNumber(row.qualifiedPipeline);
         if (matched.lostIsRank   !== undefined) row.lostIsRank   = parseNumber(row.lostIsRank);
         if (matched.lostIsBudget !== undefined) row.lostIsBudget = parseNumber(row.lostIsBudget);
 
@@ -603,7 +628,7 @@
           `${totalClicks.toLocaleString()} clicks · ${totalLeads.toLocaleString()} leads`;
 
         // Show column mapping so user can verify fuzzy matches
-        const allDisplayFields = ['budgetGroup', 'campaign', 'cost', 'clicks', 'leads', 'lostIsRank', 'lostIsBudget'];
+        const allDisplayFields = ['budgetGroup', 'campaign', 'cost', 'clicks', 'leads', 'engine', 'grossPipeline', 'qualifiedPipeline', 'lostIsRank', 'lostIsBudget'];
         const matchHtml = allDisplayFields.map(field => {
           const config = COLUMN_MATCHERS[field];
           const csvCol = matched[field];
@@ -668,6 +693,9 @@
               clicks: row.clicks,
               leads: row.leads,
             };
+            if (row.engine !== undefined && row.engine !== '') entry.engine = row.engine;
+            if (row.grossPipeline !== undefined) entry.grossPipeline = row.grossPipeline;
+            if (row.qualifiedPipeline !== undefined) entry.qualifiedPipeline = row.qualifiedPipeline;
             if (row.lostIsRank   !== undefined) entry.lostIsRank   = row.lostIsRank;
             if (row.lostIsBudget !== undefined) entry.lostIsBudget = row.lostIsBudget;
             return entry;
