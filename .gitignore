@@ -1,0 +1,17 @@
+# Secrets. .env.example is the exception: names only, never values.
+# mini-cto docs/qa/40-must-haves.md rule 1 — search-term-sweeper and
+# campaign-auditor both shipped without this, and one `git add -A`
+# leaks a key permanently.
+.env
+.env.*
+!.env.example
+
+node_modules/
+.vercel
+.DS_Store
+*.log
+
+# Claude Code local state. Also in ~/.config/git/ignore, but kept here
+# too so a collaborator without that file is still covered.
+.claude/settings.local.json
+.claude/worktrees/
