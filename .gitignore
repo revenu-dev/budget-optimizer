@@ -1,3 +1,16 @@
+# Credential files, whatever they happen to be called.
+#
+# ADDED 2 Sep 2026 AFTER A NEAR MISS in client-requests: a file called `creds`
+# holding two live API keys sat in a repo root, was not matched by the .env*
+# globs, and was swept into a commit by `git add -A`. It was zero bytes at that
+# moment, so nothing leaked, and that is luck rather than a control.
+*creds*
+*credential*
+*secret*
+*.pem
+*.p12
+*.key
+
 # Secrets. .env.example is the exception: names only, never values.
 # mini-cto docs/qa/40-must-haves.md rule 1 — search-term-sweeper and
 # campaign-auditor both shipped without this, and one `git add -A`
