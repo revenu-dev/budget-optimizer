@@ -2,7 +2,11 @@
 
 `gas.js` is the Google Apps Script web app that reads a client's budget planner (`Pacing & Optimization` tab) and writes suggested weightings back. Since 14 September 2026 its only caller is the Budgets tool in `team-revenu/tools` (`api/budgets/_planner.js`). `index.html` is the retired intake page and redirects to `tools.revenuagency.io`.
 
-Script project in Drive: **Budget optimizer** (`1eySaRtXpjCU_KVos1NdlhqybFq5XTK0vSDVLXmGJHxrQFuE5xvROsMHj`). Deployed URL: `https://script.google.com/macros/s/AKfycbyKod7AuFlgOjIVrwvO1xJhG1fCafvktzGuaJOqUGFqxf-lbGObJcM0rL8j3xRDyHwT/exec` (env `BUDGET_GAS_URL` on the tools project).
+Script project in Drive: **Budget optimizer** (`1eySaRtXpjCU_KVos1NdlhqybFq5XTK0vSDVLXmGJHxrQFuE5xvROsMHj`).
+
+Deployments (the tools project reads the URL from Admin → Credentials, `BUDGET_GAS_URL`, not from Vercel):
+- **v2, 17 Sep 2026, live:** `https://script.google.com/macros/s/AKfycbyTRrPTwhFTr8KaSYU1i_nBS9PAjHBkr5jxuwVQBOOac4UhQLG0F0pSOeFr_GqQCsBz/exec`. A new deployment, not a new version of the old one.
+- **v1, 14 Feb 2026, still serving the old script:** `https://script.google.com/macros/s/AKfycbyKod7AuFlgOjIVrwvO1xJhG1fCafvktzGuaJOqUGFqxf-lbGObJcM0rL8j3xRDyHwT/exec`. Nothing points at it any more; archive it in Manage deployments.
 
 ## Contract v2 (17 September 2026)
 
@@ -28,7 +32,9 @@ GET -> {success:false, error:"POST only"}
 2. Project Settings, Script Properties: add `BUDGET_TOKEN` = 32 random bytes as hex (`openssl rand -hex 32`).
 3. Deploy, Manage deployments, edit the existing deployment, Version: New version, Deploy. The URL does not change.
 4. On the tools Vercel project set `BUDGET_GAS_TOKEN` to the same value (Production and Preview), redeploy.
-5. Record the deployment version number here: **v? (date)**.
+5. Record the deployment here (see the list at the top).
+
+**Checked 17 Sep 2026 against a scratch copy of the Abnormal planner (192 rows):** GET refused; wrong tab refused; read returned rows with row numbers, channel and weightings as percentages; a write by row landed; a write to a row holding another campaign was refused with the warning and wrote nothing; Actual untouched. **Open:** `BUDGET_TOKEN` is not set as a Script Property, so any token is accepted; set it and the matching `BUDGET_GAS_TOKEN` under Admin → Credentials.
 
 ## The six checks
 
