@@ -55,11 +55,12 @@ curl -sL -X POST "$U" -H 'content-type: application/json' -d '{"action":"write",
 curl -sL -X POST "$U" -H 'content-type: application/json' -d '{"action":"write","sheetId":"'$T'","token":"'$K'","results":[{"rowIndex":ROW,"budgetGroup":"GROUP","campaign":"Not this one","suggestedWeighting":99}]}' | jq '{rowsWritten, warnings}'   # rowsWritten 0, one warning
 ```
 
-A seventh, since 1 October 2026: a write with `actualWeighting` on a template row changes Percentage Weighting Actual on that row, and the answer's `columns` lists `actualWeighting`.
+A seventh, since 1 October 2026: a write that sends `actualWeighting` leaves Percentage Weighting Actual exactly as it was, and the answer's `columns` does not list it.
 
 ## History
 
 - 14 Feb 2026: first deployment, composite key writes, batch column runs.
 - 3e3a29c: GP/QP columns and engine in the payload (never deployed to Drive).
 - 1 Oct 2026: `write` puts `actualWeighting` into Percentage Weighting Actual as well as Suggested (the review moved into tools/budgets), keeps any formula in Actual and says so in `warnings`, and answers `columns`. Deploy as a new version of the v2 deployment; `node test/gas.test.cjs` first. Until it is deployed, tools says "only into Suggested" after a write.
+- 1 Oct 2026, evening: reversed. Actual is never written again (Kavinda: it is the baseline a PMM judges the suggestion against, with client lead data from Looker). `columns` stays. Deploy as a new version; `node test/gas.test.cjs` first.
 - 17 Sep 2026: contract v2 (rows, rowIndex writes, token, POST only, display-value weightings). E9 WP-B12b in `tools/BACKLOG.md`.

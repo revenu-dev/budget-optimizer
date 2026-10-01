@@ -9,8 +9,7 @@
  *         rows:[{rowIndex, group, campaign, channel, engine, currentWeighting}],                  (v2: every row, in sheet order)
  *         warnings:[...]}
  *   POST {action:"write", token?, sheetId|sheetUrl, tabName?, results:[{rowIndex?, budgetGroup, campaign, cost, clicks, cpc, leads, cpl,
- *                                                                        grossPipeline, qualifiedPipeline, suggestedWeighting, actualWeighting?,
- *                                                                        lostIsRank, lostIsBudget}]}
+ *                                                                        grossPipeline, qualifiedPipeline, suggestedWeighting, lostIsRank, lostIsBudget}]}
  *     -> {success, rowsWritten, total, warnings:[...], columns:[the fields this write put in the sheet]}
  *   GET   -> {success:false, error:"POST only"}
  *
@@ -25,11 +24,12 @@
  *    so a double space or a non-breaking space in the sheet never matched).
  *  - `token`: Script Property BUDGET_TOKEN. When the property is set, a request without the same token
  *    is refused. Apps Script web apps cannot read request headers, so it travels in the body.
- *  - `actualWeighting` (1 October 2026): the review moved into tools/budgets, so the approved weighting
- *    goes into Percentage Weighting Actual as well as Suggested, and the live split moves with the write.
- *    Only when the caller sends it. A cell in Actual that holds a FORMULA is left alone and named in
- *    the warnings: some planners compute Actual, and overwriting a formula is not undone by writing again.
- *    `columns` says which fields actually landed, so the caller never claims a column it did not write.
+ *  - PERCENTAGE WEIGHTING ACTUAL IS NEVER WRITTEN, whatever the caller sends. On 1 October 2026 this
+ *    script briefly wrote the approved weighting into Actual as well; Kavinda's review the same day
+ *    reversed it (Pavlo and Joe agreed): Actual is the PMM's baseline, judged against client-specific
+ *    lead data from Looker, and overwriting it hid the very number the suggestion is weighed against.
+ *    Suggested is the AI's column; moving Actual stays a person's decision in the sheet.
+ *  - `columns` says which fields actually landed, so the caller can check Actual was not among them.
  *  - `tabName`: when given, the tab must exist by that name; nothing falls back to the first sheet.
  *    Without it the old heuristic runs (a tab whose name contains "pacing" or "budget" and whose
  *    first ten rows contain "campaign"), and when nothing qualifies it is an error, not sheets[0].
@@ -67,15 +67,13 @@ var WRITE_COLUMNS = {
   grossPipeline:      { patterns: [['gross', 'pipeline'], ['gp']], exact: false },
   qualifiedPipeline:  { patterns: [['qualified', 'pipeline'], ['qp']], exact: false },
   suggestedWeighting: { patterns: [['weighting', 'suggested']], exact: false },
-  actualWeighting:    { patterns: [['weighting', 'actual'], ['weighting', 'before']], exact: false },
   lostIsRank:         { patterns: [['lost', 'rank']],           exact: false },
   lostIsBudget:       { patterns: [['lost', 'budget']],         exact: false },
 };
 
 var READ_MATCH_ORDER = ['budgetGroup', 'currentWeighting', 'suggestedWeighting', 'engine', 'channel', 'cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'campaign'];
-var WRITE_MATCH_ORDER = ['budgetGroup', 'suggestedWeighting', 'actualWeighting', 'cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'lostIsRank', 'lostIsBudget', 'campaign'];
-var WRITE_FIELDS = ['cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'suggestedWeighting', 'actualWeighting', 'lostIsRank', 'lostIsBudget'];
-var PERCENT_FIELDS = { suggestedWeighting: true, actualWeighting: true };
+var WRITE_MATCH_ORDER = ['budgetGroup', 'suggestedWeighting', 'cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'lostIsRank', 'lostIsBudget', 'campaign'];
+var WRITE_FIELDS = ['cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'suggestedWeighting', 'lostIsRank', 'lostIsBudget'];
 
 // ─── Shared Helpers ─────────────────────────────────────────────────
 
@@ -288,11 +286,6 @@ function processWrite_(payload) {
     available.forEach(function (f) { columnData[f] = new Array(numRows).fill(null); });
     var rowsWritten = 0;
     var warnings = [];
-    /* Formulas in Actual are the planner's, not ours: those rows keep them. */
-    var actualFormulas = (columnMap.actualWeighting !== undefined && numRows > 0)
-      ? sheet.getRange(headerRow + 1, columnMap.actualWeighting + 1, numRows, 1).getFormulas()
-      : [];
-    var formulaRows = [];
 
     for (var i = 0; i < results.length; i++) {
       var res = results[i];
@@ -312,12 +305,7 @@ function processWrite_(payload) {
       }
       available.forEach(function (field) {
         var val = res[field];
-        if (val === undefined || val === null) return;
-        if (field === 'actualWeighting' && actualFormulas[rowOffset] && actualFormulas[rowOffset][0]) {
-          formulaRows.push(headerRow + 1 + rowOffset);
-          return;
-        }
-        columnData[field][rowOffset] = PERCENT_FIELDS[field] ? val / 100 : val;
+        if (val !== undefined && val !== null) columnData[field][rowOffset] = (field === 'suggestedWeighting') ? val / 100 : val;
       });
       rowsWritten++;
     }
@@ -339,7 +327,6 @@ function processWrite_(payload) {
       }
     });
 
-    if (formulaRows.length) warnings.push('Percentage Weighting Actual is a formula on row' + (formulaRows.length === 1 ? ' ' : 's ') + formulaRows.join(', ') + ', so Actual was left alone there; Suggested has the new weighting.');
     var columns = available.filter(function (f) { return columnData[f].some(function (v) { return v !== null; }); });
     return buildResponse_({ success: true, rowsWritten: rowsWritten, total: results.length, warnings: warnings, columns: columns });
   } catch (err) { return buildResponse_({ success: false, error: err.message }); }
