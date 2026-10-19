@@ -29,11 +29,12 @@ function run(payload) {
     SpreadsheetApp: { openById: () => ({ getSheetByName: (n) => (n === "Pacing & Optimization" ? t.sheet : null), getSheets: () => [t.sheet] }) },
     ContentService: { createTextOutput: (s) => ({ s, setMimeType() { return this; } }), MimeType: { JSON: 1 } },
     PropertiesService: { getScriptProperties: () => ({ getProperty: () => null }) },
+    DriveApp: { searchFiles: (q) => { ctx.__q = q; const fs = (payload.__files || []).slice(); return { hasNext: () => fs.length > 0, next: () => { const f = fs.shift(); return { getId: () => f.id, getName: () => f.name, getLastUpdated: () => new Date(f.at) }; } }; } },
     console,
   };
   vm.createContext(ctx); vm.runInContext(src, ctx);
   const out = ctx.doPost({ postData: { contents: JSON.stringify(payload) } });
-  return { res: JSON.parse(out.s), rows: t.rows };
+  return { res: JSON.parse(out.s), rows: t.rows, q: ctx.__q };
 }
 const res = (o) => Object.assign({ budgetGroup: "G1", campaign: "A", rowIndex: 2, cost: 1 }, o);
 let pass = 0, fail = 0; const ok = (n, c, x) => { c ? pass++ : fail++; console.log((c ? "  ok   " : "  FAIL ") + n + (c ? "" : " -> " + JSON.stringify(x))); };
@@ -49,4 +50,14 @@ ok("cost is written", a.rows[1][13] === 1, a.rows[1][13]);
 // 3. Reading still maps Actual as current and Suggested separately.
 const c = run({ action: "read", sheetId: base.sheetId, tabName: base.tabName });
 ok("read still maps Actual as current", c.res.success && c.res.columnIndices.currentWeighting === 20 && c.res.columnIndices.suggestedWeighting === 21, c.res.columnIndices || c.res);
+// 4. list (19 Oct 2026): every Planner sheet, newest first, Landing Page planners left out.
+const l = run({ action: "list", __files: [
+  { id: "a1", name: "Revenu x Xora - Google Planner", at: "2026-10-12T19:16:00Z" },
+  { id: "a2", name: "Revenu x Xora - Landing Page Planner", at: "2026-10-12T19:08:00Z" },
+  { id: "a3", name: "Revenu x Doss - Search Planner", at: "2026-10-14T00:43:00Z" },
+] });
+ok("list answers success with files", l.res.success && Array.isArray(l.res.files), l.res);
+ok("...Landing Page planners left out", l.res.files.every((f) => !/Landing Page/.test(f.name)) && l.res.files.length === 2, l.res.files);
+ok("...newest first", l.res.files[0].id === "a3" && l.res.files[1].id === "a1", l.res.files);
+ok("...asking Drive for spreadsheets named Planner, not in the bin", /spreadsheet/.test(l.q) && /Planner/.test(l.q) && /trashed = false/.test(l.q), l.q);
 console.log(pass + " passed, " + fail + " failed"); process.exit(fail ? 1 : 0);

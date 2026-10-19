@@ -191,7 +191,28 @@ function doPost(e) {
     var action = (payload.action || '').toLowerCase();
     if (action === 'read') return processRead_(payload);
     if (action === 'write') return processWrite_(payload);
+    if (action === 'list') return processList_(payload);
     return buildResponse_({ success: false, error: 'Unknown action.' });
+  } catch (err) { return buildResponse_({ success: false, error: err.message }); }
+}
+
+// ─── Action: List Planners (19 October 2026) ────────────────────────
+
+/** Every planner sheet this script's owner can open, for tools' Settings > Switchboard dropdown: the newest first,
+ *  at most 500. "Landing Page Planner"s carry no budget, so they are left out here rather than in every caller. */
+function processList_(payload) {
+  try {
+    var q = 'mimeType = "application/vnd.google-apps.spreadsheet" and title contains "Planner" and trashed = false';
+    var it = DriveApp.searchFiles(q);
+    var files = [];
+    while (it.hasNext() && files.length < 500) {
+      var f = it.next();
+      var name = f.getName();
+      if (/landing page planner/i.test(name)) continue;
+      files.push({ id: f.getId(), name: name, updatedAt: f.getLastUpdated().toISOString() });
+    }
+    files.sort(function (a, b) { return a.updatedAt < b.updatedAt ? 1 : -1; });
+    return buildResponse_({ success: true, files: files });
   } catch (err) { return buildResponse_({ success: false, error: err.message }); }
 }
 

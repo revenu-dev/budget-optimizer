@@ -17,6 +17,8 @@ POST {action:"read",  token?, sheetId|sheetUrl, tabName?}
       rows:[{rowIndex, group, campaign, channel, engine, currentWeighting}], warnings}
 POST {action:"write", token?, sheetId|sheetUrl, tabName?, results:[{rowIndex?, budgetGroup, campaign, cost, clicks, cpc, leads, cpl, grossPipeline, qualifiedPipeline, suggestedWeighting, lostIsRank, lostIsBudget}]}
   -> {success, rowsWritten, total, warnings}
+POST {action:"list",  token?}
+  -> {success, files:[{id, name, updatedAt}]}   every "Planner" sheet the owner can open, newest first, Landing Page planners left out (19 Oct 2026; needs the Drive scope, so the first run after deploying asks the owner to authorise)
 GET -> {success:false, error:"POST only"}
 ```
 
