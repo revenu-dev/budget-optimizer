@@ -5,10 +5,11 @@ const src = fs.readFileSync(process.argv[2] || require("path").join(__dirname, "
 function makeSheet() {
   const W = 24;
   const hdr = Array(W).fill("");
-  Object.assign(hdr, { 0: "Channel", 4: "Budget Group", 12: "Campaign", 13: "Cost", 14: "Clicks", 15: "CPC", 16: "Leads", 17: "CPL", 18: "Engine", 20: "Percentage Weighting Actual", 21: "Percentage Weighting Suggested" });
+  Object.assign(hdr, { 0: "Channel", 4: "Budget Group", 12: "Campaign", 13: "Cost", 14: "Clicks", 15: "CPC", 16: "Leads", 17: "CPL", 18: "Engine", 20: "Percentage Weighting Actual", 21: "Percentage Weighting Suggested", 22: "Bidding Strategy", 23: "Bid Value" });
   const rows = [hdr];
   const mk = (g, c, a) => { const r = Array(W).fill(""); r[4] = g; r[12] = c; r[18] = "Leads"; r[20] = a; return r; };
   rows.push(mk("G1", "A", 0.5), mk("", "B", 0.5), mk("G2", "C", 1));
+  rows[3][22] = "Manual bidding"; rows[3][23] = 9; // C's bid, typed before the 20 Oct bid write existed
   const formulas = rows.map((r) => r.map(() => ""));
   formulas[3][20] = "=1-SUM(T2:T3)"; // C's Actual is a formula
   const writes = [];
@@ -50,6 +51,12 @@ ok("cost is written", a.rows[1][13] === 1, a.rows[1][13]);
 // 3. Reading still maps Actual as current and Suggested separately.
 const c = run({ action: "read", sheetId: base.sheetId, tabName: base.tabName });
 ok("read still maps Actual as current", c.res.success && c.res.columnIndices.currentWeighting === 20 && c.res.columnIndices.suggestedWeighting === 21, c.res.columnIndices || c.res);
+// 3b. The live bid (20 Oct 2026): strategy and bid land in their own columns; "" clears a bid; a row sent without them keeps its cells.
+const b = run(Object.assign({}, base, { results: [res({ biddingStrategy: "Manual bidding", bidValue: 12.5 }), res({ campaign: "B", rowIndex: 3, biddingStrategy: "Maximum delivery", bidValue: "" }), res({ budgetGroup: "G2", campaign: "C", rowIndex: 4 })] }));
+ok("Bidding Strategy is its own column, never the bid's", b.rows[1][22] === "Manual bidding" && b.rows[1][23] === 12.5, [b.rows[1][22], b.rows[1][23]]);
+ok("a strategy with no bid clears the bid cell", b.rows[2][22] === "Maximum delivery" && b.rows[2][23] === "", [b.rows[2][22], b.rows[2][23]]);
+ok("a row sent without a bid keeps whatever it had", b.rows[3][22] === "Manual bidding" && b.rows[3][23] === 9, [b.rows[3][22], b.rows[3][23]]);
+ok("columns names both", b.res.columns.indexOf("biddingStrategy") >= 0 && b.res.columns.indexOf("bidValue") >= 0, b.res.columns);
 // 4. list (19 Oct 2026): every Planner sheet, newest first, Landing Page planners left out.
 const l = run({ action: "list", __files: [
   { id: "a1", name: "Revenu x Xora - Google Planner", at: "2026-10-12T19:16:00Z" },

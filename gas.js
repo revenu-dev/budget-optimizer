@@ -9,7 +9,8 @@
  *         rows:[{rowIndex, group, campaign, channel, engine, currentWeighting}],                  (v2: every row, in sheet order)
  *         warnings:[...]}
  *   POST {action:"write", token?, sheetId|sheetUrl, tabName?, results:[{rowIndex?, budgetGroup, campaign, cost, clicks, cpc, leads, cpl,
- *                                                                        grossPipeline, qualifiedPipeline, suggestedWeighting, lostIsRank, lostIsBudget}]}
+ *                                                                        grossPipeline, qualifiedPipeline, suggestedWeighting, lostIsRank, lostIsBudget,
+ *                                                                        biddingStrategy, bidValue ("" clears a bid that is no longer set)}]}
  *     -> {success, rowsWritten, total, warnings:[...], columns:[the fields this write put in the sheet]}
  *   GET   -> {success:false, error:"POST only"}
  *
@@ -69,11 +70,16 @@ var WRITE_COLUMNS = {
   suggestedWeighting: { patterns: [['weighting', 'suggested']], exact: false },
   lostIsRank:         { patterns: [['lost', 'rank']],           exact: false },
   lostIsBudget:       { patterns: [['lost', 'budget']],         exact: false },
+  /* The live bid (20 Oct 2026, Joe's "budget planner with actual bids"): tools reads it from the ad
+     account at Write and overwrites these two. Strategy is matched first, so "Bidding Strategy" can never
+     be taken for the bid; "Bid Value" (Abnormal) and "Manual Bid" (the template) are the bid. */
+  biddingStrategy:    { patterns: [['bidding', 'strategy']],   exact: false },
+  bidValue:           { patterns: [['bid', 'value'], ['manual', 'bid']], exact: false },
 };
 
 var READ_MATCH_ORDER = ['budgetGroup', 'currentWeighting', 'suggestedWeighting', 'engine', 'channel', 'cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'campaign'];
-var WRITE_MATCH_ORDER = ['budgetGroup', 'suggestedWeighting', 'cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'lostIsRank', 'lostIsBudget', 'campaign'];
-var WRITE_FIELDS = ['cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'suggestedWeighting', 'lostIsRank', 'lostIsBudget'];
+var WRITE_MATCH_ORDER = ['budgetGroup', 'suggestedWeighting', 'cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'lostIsRank', 'lostIsBudget', 'biddingStrategy', 'bidValue', 'campaign'];
+var WRITE_FIELDS = ['cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'suggestedWeighting', 'lostIsRank', 'lostIsBudget', 'biddingStrategy', 'bidValue'];
 
 // ─── Shared Helpers ─────────────────────────────────────────────────
 
