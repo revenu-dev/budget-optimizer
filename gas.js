@@ -5,6 +5,8 @@
  * CONTRACT v3, 1 November 2026 (tools E47): `read` adds, per row, accountId, platformId, dailyBudget, makeAmount,
  *   status, campaignStatus; per group, `groupTargets` (the typed Daily Target rows); and `budgets`, the Budgets tab
  *   ([{group, monthlyBudget, rowIndex}]). Nothing a v2 caller reads changed.
+ * CONTRACT v4, 1 November 2026 (tools E47 WP-P7): `read` adds `targetRows` (each group's Daily Target row number);
+ *   a new `cells` action writes named fields into checked rows (below). Nothing a v3 caller reads changed.
  *
  *   POST {action:"read",  token?, sheetId|sheetUrl, tabName?}
  *     -> {success, sheetId, tabName, headerRow, columnIndices,
@@ -210,6 +212,7 @@ function doPost(e) {
     if (action === 'read') return processRead_(payload);
     if (action === 'write') return processWrite_(payload);
     if (action === 'list') return processList_(payload);
+    if (action === 'cells') return processCells_(payload);
     return buildResponse_({ success: false, error: 'Unknown action.' });
   } catch (err) { return buildResponse_({ success: false, error: err.message }); }
 }
@@ -252,6 +255,7 @@ function processRead_(payload) {
     var budgetGroups = {};
     var rows = [];
     var groupTargets = {};
+    var targetRows = {};
     if (numRows > 0) {
       var range = sheet.getRange(headerRow + 1, 1, numRows, sheet.getLastColumn());
       var allData = range.getValues();
@@ -268,6 +272,7 @@ function processRead_(payload) {
         /* v3: the group's typed daily target, from its "Budget Group Daily Target" row. */
         if (campaignName.toLowerCase().indexOf('daily target') !== -1 && columnMap.dailyBudget !== undefined) {
           groupTargets[budgetGroupValue || currentBudgetGroup || 'Unknown'] = parseMoney_(row[columnMap.dailyBudget]);
+          targetRows[budgetGroupValue || currentBudgetGroup || 'Unknown'] = headerRow + r + 1;
           continue;
         }
         if (!campaignName || !engineValue || campaignName.toLowerCase().indexOf('daily target') !== -1) continue;
@@ -295,7 +300,7 @@ function processRead_(payload) {
     return buildResponse_({
       success: true, sheetId: sheetId, tabName: sheet.getName(), headerRow: headerRow, columnIndices: columnMap,
       budgetGroups: budgetGroups, rows: rows, warnings: warnings,
-      contract: 3, groupTargets: groupTargets, budgets: readBudgetsTab_(spreadsheet, warnings),
+      contract: 4, groupTargets: groupTargets, targetRows: targetRows, budgets: readBudgetsTab_(spreadsheet, warnings),
     });
   } catch (err) { return buildResponse_({ success: false, error: err.message }); }
 }
@@ -344,6 +349,100 @@ function readBudgetsTab_(spreadsheet, warnings) {
   }
   warnings.push('The "Budgets" tab has no "Budget Group" and "Monthly Budget" headers in its first 10 rows.');
   return [];
+}
+
+// ─── Action: Cells (contract v4, 1 Nov 2026, tools E47 WP-P7) ───────
+
+/**
+ * Named fields into named rows, each row checked first: on the Pacing tab its Campaign cell must be the campaign the
+ * caller names (or "Budget Group Daily Target" for a target row), on the Budgets tab its Budget Group cell the group.
+ * A row that does not match is not written and is named in `warnings`; nothing else in the sheet is touched, no row
+ * or column is added or moved (each client's Make scenario reads columns by position).
+ *
+ *   {action:"cells", token, sheetId, tabName,
+ *    pacing:[{rowIndex, campaign, set:{currentWeighting?, dailyBudget?, makeAmount?, status?}}],
+ *    budgets:[{rowIndex, group, monthlyBudget}],
+ *    mirror:true}
+ *
+ * PERCENTAGE WEIGHTING ACTUAL is written only when `mirror` is true: the client's planner is then a copy of the
+ * groups Tools holds (its per-client "Tools owns this planner" switch), and Actual has to say what Tools says or
+ * Funnel and Looker pace against the wrong number. The optimizer's `write` still never writes it (1 October 2026).
+ * Weightings go in as fractions (60 -> 0.6, the planner's percent format); `status: ""` clears the cell.
+ */
+var CELL_FIELDS = ['currentWeighting', 'dailyBudget', 'makeAmount', 'status'];
+function processCells_(payload) {
+  try {
+    var sheetId = extractSheetId(payload.sheetId || payload.sheetUrl);
+    if (!sheetId) throw new Error('No sheet id.');
+    var spreadsheet = SpreadsheetApp.openById(sheetId);
+    var warnings = [], written = 0;
+    var pacing = payload.pacing || [], budgets = payload.budgets || [];
+    if (pacing.length) {
+      var sheet = findBudgetTab(spreadsheet, payload.tabName).sheet;
+      var colResult = buildColumnMap(sheet, READ_COLUMNS, READ_MATCH_ORDER);
+      if (colResult.headerRow === null) throw new Error(colResult.missing.join('; '));
+      var map = colResult.columnMap, headerRow = colResult.headerRow;
+      var numRows = sheet.getLastRow() - headerRow;
+      var values = numRows > 0 ? sheet.getRange(headerRow + 1, 1, numRows, sheet.getLastColumn()).getValues() : [];
+      var fields = CELL_FIELDS.filter(function (f) { return map[f] !== undefined && (f !== 'currentWeighting' || payload.mirror === true); });
+      var cols = {};
+      fields.forEach(function (f) { cols[f] = new Array(numRows).fill(null); });
+      for (var i = 0; i < pacing.length; i++) {
+        var u = pacing[i], off = Number(u.rowIndex) - headerRow - 1;
+        if (!(off >= 0 && off < numRows)) { warnings.push('Row ' + u.rowIndex + ' is outside the tab. Not written.'); continue; }
+        if (normalizeCampaignName(values[off][map.campaign]) !== normalizeCampaignName(u.campaign)) {
+          warnings.push('Row ' + u.rowIndex + ' holds "' + String(values[off][map.campaign] || '') + '", not "' + u.campaign + '". Not written; the sheet has moved since it was read.');
+          continue;
+        }
+        var set = u.set || {}, any = false;
+        fields.forEach(function (f) {
+          if (set[f] === undefined || set[f] === null) return;
+          cols[f][off] = f === 'currentWeighting' ? Number(set[f]) / 100 : set[f];
+          any = true;
+        });
+        if (set.currentWeighting !== undefined && payload.mirror !== true) warnings.push('Row ' + u.rowIndex + ': Actual is only written for a planner Tools owns. Not written.');
+        if (any) written++;
+      }
+      fields.forEach(function (f) { writeRuns_(sheet, headerRow, map[f] + 1, cols[f]); });
+    }
+    if (budgets.length) {
+      var bs = spreadsheet.getSheetByName('Budgets');
+      if (!bs) warnings.push('No "Budgets" tab: monthly budgets were not written.');
+      else {
+        var data = bs.getRange(1, 1, bs.getLastRow(), bs.getLastColumn()).getValues();
+        var gi = -1, mi = -1;
+        for (var h = 0; h < Math.min(10, data.length) && (gi < 0 || mi < 0); h++) {
+          gi = -1; mi = -1;
+          var hdr = data[h].map(normalizeHeader);
+          for (var c = 0; c < hdr.length; c++) {
+            if (gi < 0 && (hdr[c] === 'budget group' || hdr[c] === 'strategic campaign')) gi = c;
+            if (mi < 0 && hdr[c].indexOf('monthly') !== -1 && hdr[c].indexOf('budget') !== -1) mi = c;
+          }
+        }
+        if (gi < 0 || mi < 0) warnings.push('The "Budgets" tab has no "Budget Group" and "Monthly Budget" headers. Not written.');
+        else for (var j = 0; j < budgets.length; j++) {
+          var b = budgets[j], r0 = Number(b.rowIndex) - 1;
+          if (!(r0 >= 0 && r0 < data.length) || normalizeCampaignName(data[r0][gi]) !== normalizeCampaignName(b.group)) { warnings.push('Budgets row ' + b.rowIndex + ' is not "' + b.group + '". Not written.'); continue; }
+          bs.getRange(r0 + 1, mi + 1).setValue(Number(b.monthlyBudget));
+          written++;
+        }
+      }
+    }
+    return buildResponse_({ success: true, written: written, warnings: warnings });
+  } catch (err) { return buildResponse_({ success: false, error: err.message }); }
+}
+
+/** One column's values (null = leave the cell alone) in contiguous runs. */
+function writeRuns_(sheet, headerRow, colIdx, colValues) {
+  var runStart = null;
+  for (var row = 0; row <= colValues.length; row++) {
+    var val = row < colValues.length ? colValues[row] : null;
+    if (val !== null && runStart === null) runStart = row;
+    else if (val === null && runStart !== null) {
+      sheet.getRange(headerRow + 1 + runStart, colIdx, row - runStart, 1).setValues(colValues.slice(runStart, row).map(function (v) { return [v]; }));
+      runStart = null;
+    }
+  }
 }
 
 // ─── Action: Write Planner ──────────────────────────────────────────

@@ -51,7 +51,7 @@ const read = { action: "read", sheetId: "1234567890abcdefghijklmnop", tabName: "
 
 const r = run(read);
 const ci = r.columnIndices;
-ok("v3: success and contract 3", r.success && r.contract === 3, r);
+ok("v3+: success and contract 4", r.success && r.contract === 4, r);
 ok("the SOP's id columns map to account (B) and platform id (C), never to Campaign or Budget Group", ci.accountId === 1 && ci.platformId === 2 && ci.campaign === 11 && ci.budgetGroup === 4, ci);
 ok("the Make amount (D) and the plain Daily Budget (S) are told apart", ci.makeAmount === 3 && ci.dailyBudget === 18, ci);
 ok("Status (X) and Campaign Status (Y) are told apart", ci.status === 23 && ci.campaignStatus === 24, ci);
