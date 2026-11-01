@@ -63,6 +63,14 @@ ok("the Daily Target rows are not campaigns", r.rows.every((x) => !/daily target
 ok("each group's typed daily target is read; a '-' target is null, never 0", r.groupTargets["Non Brand"] === 167.23 && r.groupTargets.Brand === null && "Brand" in r.groupTargets, r.groupTargets);
 ok("the Budgets tab: one row per group, monthly budget a number, blank rows skipped", r.budgets.length === 2 && r.budgets[0].group === "Non Brand" && r.budgets[0].monthlyBudget === 5900 && r.budgets[0].rowIndex === 2, r.budgets);
 ok("a '-' monthly budget is null and warned about by name (Hatch, 28 Oct)", r.budgets[1].monthlyBudget === null && r.warnings.some((w) => /"Brand" has a monthly budget that is not a number/.test(w)), [r.budgets[1], r.warnings]);
+{
+  /* Abnormal's Budgets tab heads its group column "Budget Group\nHighlight" (read 1 Nov 2026): a header that starts
+     with Budget Group is the group column. */
+  const saved = budgetsRows[0][1]; budgetsRows[0][1] = "Budget Group\nHighlight";
+  const ab = run(read);
+  budgetsRows[0][1] = saved;
+  ok("a Budgets header that starts with Budget Group (Abnormal's \"Budget Group Highlight\") is the group column", ab.budgets.length === 2 && ab.budgets[0].group === "Non Brand" && ab.budgets[0].monthlyBudget === 5900, ab.budgets);
+}
 const nob = run(read, { noBudgets: true });
 ok("no Budgets tab: an empty list and a warning, not an error", nob.success && nob.budgets.length === 0 && nob.warnings.some((w) => /No "Budgets" tab/.test(w)), nob);
 console.log(pass + " passed, " + fail + " failed"); process.exit(fail ? 1 : 0);

@@ -333,7 +333,7 @@ function readBudgetsTab_(spreadsheet, warnings) {
     var hdr = data[h].map(normalizeHeader);
     var gi = -1, mi = -1;
     for (var c = 0; c < hdr.length; c++) {
-      if (gi < 0 && (hdr[c] === 'budget group' || hdr[c] === 'strategic campaign')) gi = c;
+      if (gi < 0 && (hdr[c] === 'budget group' || hdr[c] === 'strategic campaign' || hdr[c].indexOf('budget group ') === 0)) gi = c;
       if (mi < 0 && hdr[c].indexOf('monthly') !== -1 && hdr[c].indexOf('budget') !== -1) mi = c;
     }
     if (gi < 0 || mi < 0) continue;
@@ -415,7 +415,7 @@ function processCells_(payload) {
           gi = -1; mi = -1;
           var hdr = data[h].map(normalizeHeader);
           for (var c = 0; c < hdr.length; c++) {
-            if (gi < 0 && (hdr[c] === 'budget group' || hdr[c] === 'strategic campaign')) gi = c;
+            if (gi < 0 && (hdr[c] === 'budget group' || hdr[c] === 'strategic campaign' || hdr[c].indexOf('budget group ') === 0)) gi = c;
             if (mi < 0 && hdr[c].indexOf('monthly') !== -1 && hdr[c].indexOf('budget') !== -1) mi = c;
           }
         }
