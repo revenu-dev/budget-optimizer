@@ -2,6 +2,9 @@
  * Budget Optimization: the planner's reader and writer, as a Google Apps Script web app.
  *
  * CONTRACT v2, 17 September 2026 (E9 WP-B12b / WP-B2). Same URL, new deployment.
+ * CONTRACT v3, 1 November 2026 (tools E47): `read` adds, per row, accountId, platformId, dailyBudget, makeAmount,
+ *   status, campaignStatus; per group, `groupTargets` (the typed Daily Target rows); and `budgets`, the Budgets tab
+ *   ([{group, monthlyBudget, rowIndex}]). Nothing a v2 caller reads changed.
  *
  *   POST {action:"read",  token?, sheetId|sheetUrl, tabName?}
  *     -> {success, sheetId, tabName, headerRow, columnIndices,
@@ -55,6 +58,15 @@ var READ_COLUMNS = {
   grossPipeline:     { patterns: [['gross', 'pipeline'], ['gp']],           required: false, exact: false },
   qualifiedPipeline: { patterns: [['qualified', 'pipeline'], ['qp']],       required: false, exact: false },
   suggestedWeighting:{ patterns: [['weighting', 'suggested']],              required: false, exact: false },
+  /* CONTRACT v3 (1 Nov 2026, tools E47 Budget Planner import): the Pacing Automation SOP's columns. IDs are read as
+     DISPLAY values (a Meta id is 17-18 digits and loses precision as a number). The Make amount is matched before the
+     plain daily budget, and Campaign Status before Status, so neither is taken for the other. */
+  accountId:         { patterns: [['account', 'id']],                       required: false, exact: false },
+  platformId:        { patterns: [['budget', 'group', 'id'], ['ad', 'group', 'id'], ['campaign', 'id']], required: false, exact: false },
+  makeAmount:        { patterns: [['daily', 'budget', 'make']],             required: false, exact: false },
+  dailyBudget:       { patterns: [['daily', 'budget']],                     required: false, exact: true },
+  campaignStatus:    { patterns: [['campaign', 'status']],                  required: false, exact: true },
+  status:            { patterns: [['status']],                              required: false, exact: true },
 };
 
 var WRITE_COLUMNS = {
@@ -77,7 +89,7 @@ var WRITE_COLUMNS = {
   bidValue:           { patterns: [['bid', 'value'], ['manual', 'bid']], exact: false },
 };
 
-var READ_MATCH_ORDER = ['budgetGroup', 'currentWeighting', 'suggestedWeighting', 'engine', 'channel', 'cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'campaign'];
+var READ_MATCH_ORDER = ['budgetGroup', 'currentWeighting', 'suggestedWeighting', 'engine', 'channel', 'accountId', 'platformId', 'makeAmount', 'dailyBudget', 'campaignStatus', 'status', 'cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'campaign'];
 var WRITE_MATCH_ORDER = ['budgetGroup', 'suggestedWeighting', 'cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'lostIsRank', 'lostIsBudget', 'biddingStrategy', 'bidValue', 'campaign'];
 var WRITE_FIELDS = ['cost', 'clicks', 'cpc', 'leads', 'cpl', 'grossPipeline', 'qualifiedPipeline', 'suggestedWeighting', 'lostIsRank', 'lostIsBudget', 'biddingStrategy', 'bidValue'];
 
@@ -239,11 +251,13 @@ function processRead_(payload) {
     var numRows = sheet.getLastRow() - headerRow;
     var budgetGroups = {};
     var rows = [];
+    var groupTargets = {};
     if (numRows > 0) {
       var range = sheet.getRange(headerRow + 1, 1, numRows, sheet.getLastColumn());
       var allData = range.getValues();
       /* Display values for the weighting only: "100%" parses to 100, the raw value 1 would not. */
       var shown = columnMap.currentWeighting !== undefined ? range.getDisplayValues() : null;
+      if (!shown) shown = range.getDisplayValues();
       var currentBudgetGroup = null;
       for (var r = 0; r < allData.length; r++) {
         var row = allData[r];
@@ -251,6 +265,11 @@ function processRead_(payload) {
         var budgetGroupValue = String(row[columnMap.budgetGroup] || '').trim();
         var engineValue = String(row[columnMap.engine] || '').trim();
         if (budgetGroupValue) currentBudgetGroup = budgetGroupValue;
+        /* v3: the group's typed daily target, from its "Budget Group Daily Target" row. */
+        if (campaignName.toLowerCase().indexOf('daily target') !== -1 && columnMap.dailyBudget !== undefined) {
+          groupTargets[budgetGroupValue || currentBudgetGroup || 'Unknown'] = parseMoney_(row[columnMap.dailyBudget]);
+          continue;
+        }
         if (!campaignName || !engineValue || campaignName.toLowerCase().indexOf('daily target') !== -1) continue;
         var group = currentBudgetGroup || 'Unknown';
         var weightRaw = shown ? shown[r][columnMap.currentWeighting] : row[columnMap.currentWeighting];
@@ -261,6 +280,12 @@ function processRead_(payload) {
           channel: columnMap.channel !== undefined ? String(row[columnMap.channel] || '').trim() : '',
           engine: engineValue,
           currentWeighting: parseWeighting(weightRaw),
+          accountId: cellText_(shown, r, columnMap.accountId),
+          platformId: cellText_(shown, r, columnMap.platformId),
+          dailyBudget: columnMap.dailyBudget !== undefined ? parseMoney_(row[columnMap.dailyBudget]) : null,
+          makeAmount: columnMap.makeAmount !== undefined ? parseMoney_(row[columnMap.makeAmount]) : null,
+          status: cellText_(shown, r, columnMap.status),
+          campaignStatus: cellText_(shown, r, columnMap.campaignStatus),
         };
         rows.push(rec);
         if (!budgetGroups[group]) budgetGroups[group] = { campaigns: {} };
@@ -270,8 +295,55 @@ function processRead_(payload) {
     return buildResponse_({
       success: true, sheetId: sheetId, tabName: sheet.getName(), headerRow: headerRow, columnIndices: columnMap,
       budgetGroups: budgetGroups, rows: rows, warnings: warnings,
+      contract: 3, groupTargets: groupTargets, budgets: readBudgetsTab_(spreadsheet, warnings),
     });
   } catch (err) { return buildResponse_({ success: false, error: err.message }); }
+}
+
+/** A cell's display text, trimmed; '' when the column is absent. */
+function cellText_(shown, r, col) {
+  if (col === undefined || !shown) return '';
+  return String(shown[r][col] === undefined || shown[r][col] === null ? '' : shown[r][col]).trim();
+}
+
+/** Money from a cell: a number, or a string like "$1,500.00"; anything else ("-", "", "#VALUE!") is null, never 0. */
+function parseMoney_(raw) {
+  if (typeof raw === 'number') return isFinite(raw) ? Math.round(raw * 100) / 100 : null;
+  var s = String(raw === null || raw === undefined ? '' : raw).replace(/[$£€,\s]/g, '');
+  if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
+  return Math.round(parseFloat(s) * 100) / 100;
+}
+
+/**
+ * v3: the Budgets tab, one row per group: [{group, monthlyBudget, rowIndex}]. Absent tab = [] and a warning.
+ * A monthly budget that is not a number is null, with a warning naming the group (Hatch, 28 Oct: a "-").
+ */
+function readBudgetsTab_(spreadsheet, warnings) {
+  var sheet = spreadsheet.getSheetByName('Budgets');
+  if (!sheet) { warnings.push('No "Budgets" tab: monthly budgets were not read.'); return []; }
+  var last = sheet.getLastRow(), width = sheet.getLastColumn();
+  if (last < 1 || width < 1) return [];
+  var data = sheet.getRange(1, 1, last, width).getValues();
+  for (var h = 0; h < Math.min(10, data.length); h++) {
+    var hdr = data[h].map(normalizeHeader);
+    var gi = -1, mi = -1;
+    for (var c = 0; c < hdr.length; c++) {
+      if (gi < 0 && (hdr[c] === 'budget group' || hdr[c] === 'strategic campaign')) gi = c;
+      if (mi < 0 && hdr[c].indexOf('monthly') !== -1 && hdr[c].indexOf('budget') !== -1) mi = c;
+    }
+    if (gi < 0 || mi < 0) continue;
+    var out = [];
+    for (var r = h + 1; r < data.length; r++) {
+      var group = String(data[r][gi] || '').trim();
+      if (!group) continue;
+      var money = parseMoney_(data[r][mi]);
+      if (money === null) warnings.push('Budgets tab: "' + group + '" has a monthly budget that is not a number.');
+      out.push({ group: group, monthlyBudget: money, rowIndex: r + 1 });
+    }
+    return out;
+  }
+  warnings.push('The "Budgets" tab has no "Budget Group" and "Monthly Budget" headers in its first 10 rows.');
+  return [];
 }
 
 // ─── Action: Write Planner ──────────────────────────────────────────
